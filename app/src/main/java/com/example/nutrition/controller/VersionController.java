@@ -19,7 +19,7 @@ public class VersionController {
     @GetMapping({"/", "/api/version"})
     public VersionInfo version() {
         String message = "v2".equals(version)
-                ? "Nutrition API v2 — welcome to the even more updated version!"
+                ? "Nutrition API v2 — welcome to the even moree updated version!"
                 : "Nutrition API v1 — welcome!";
         return new VersionInfo(version, message, pod);
     }
