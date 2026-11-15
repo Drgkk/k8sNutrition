@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nutrition-config
+data:
+  POSTGRES_USER: nutrition
+  POSTGRES_DB: nutrition

@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nutrition-v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nutrition
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: nutrition
+        version: v1
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+      containers:
+      - name: app
+        image: nutrition-api:v1
+        imagePullPolicy: Never
+        ports:
+        - name: http
+          containerPort: 8181
+          protocol: TCP
+        env:
+        - name: SERVER_PORT
+          value: '8181'
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: nutrition-config
+              key: POSTGRES_DB
+        - name: SPRING_DATASOURCE_URL
+          value: jdbc:postgresql://postgres:5432/$(POSTGRES_DB)
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: nutrition-config
+              key: POSTGRES_USER
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nutrition-db
+              key: POSTGRES_PASSWORD
+        - name: JAVA_TOOL_OPTIONS
+          value: -XX:MaxRAMPercentage=75.0
+        startupProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          periodSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: http
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 768Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nutrition-v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nutrition
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: nutrition
+        version: v2
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+      containers:
+      - name: app
+        image: nutrition-api:v2
+        imagePullPolicy: Never
+        ports:
+        - name: http
+          containerPort: 8181
+          protocol: TCP
+        env:
+        - name: SERVER_PORT
+          value: '8181'
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: nutrition-config
+              key: POSTGRES_DB
+        - name: SPRING_DATASOURCE_URL
+          value: jdbc:postgresql://postgres:5432/$(POSTGRES_DB)
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: nutrition-config
+              key: POSTGRES_USER
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nutrition-db
+              key: POSTGRES_PASSWORD
+        - name: JAVA_TOOL_OPTIONS
+          value: -XX:MaxRAMPercentage=75.0
+        startupProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          periodSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: http
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 768Mi

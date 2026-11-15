@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pz2
+resources:
+- namespace.yaml
+- config.yaml
+- secret.yaml
+- postgres-pv.yaml
+- postgres-pvc.yaml
+- postgres-service.yaml
+- java-service.yaml
+- postgres-deployment.yaml
+- java-deployment.yaml
+- ingress.yaml

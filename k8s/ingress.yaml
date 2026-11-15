@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nutrition
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: 'true'
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: nutrition.local
+    http:
+      paths:
+      - path: /v1(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: nutrition-v1
+            port:
+              number: 80
+      - path: /v2(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: nutrition-v2
+            port:
+              number: 80
