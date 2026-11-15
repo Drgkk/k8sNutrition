@@ -1,1 +1,4 @@
-*.sh -text
+*.sh text eol=lf
+app/gradlew text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
