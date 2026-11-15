@@ -23,7 +23,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Normalize shell script line endings
+      - name: Normalize script and properties line endings
         shell: bash
         run: |
           set -euo pipefail
@@ -32,7 +32,7 @@ jobs:
           python3 - <<'PYTHON'
           from pathlib import Path
 
-          for path in [*Path("scripts").glob("*.sh"), Path("app/gradlew")]:
+          for path in [*Path("scripts").glob("*.sh"), Path("app/gradlew"), *Path("app").rglob("*.properties")]:
               data = path.read_bytes()
               count = data.count(b"\r\n")
               path.write_bytes(data.replace(b"\r\n", b"\n"))

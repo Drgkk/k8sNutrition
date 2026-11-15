@@ -5,7 +5,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROPERTIES_FILE="$SCRIPT_DIR/gradle/wrapper/gradle-wrapper.properties"
-GRADLE_VERSION="$(sed -n 's#^distributionUrl=.*gradle-\([0-9][0-9.]*\)-bin\.zip$#\1#p' "$PROPERTIES_FILE")"
+GRADLE_VERSION="$(sed -n 's#^distributionUrl=.*gradle-\([0-9][0-9.]*\)-bin\.zip[[:space:]]*$#\1#p' "$PROPERTIES_FILE")"
 [[ -n "$GRADLE_VERSION" ]] || { echo "Cannot read Gradle version from $PROPERTIES_FILE" >&2; exit 1; }
 GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.gradle}"
 INSTALL_DIR="$GRADLE_USER_HOME/bootstrap/gradle-$GRADLE_VERSION"
