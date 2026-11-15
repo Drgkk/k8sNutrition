@@ -1,0 +1,45 @@
+name: Build and deploy to Minikube
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pz2-minikube
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, pz2]
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Validate scripts and manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for script in scripts/*.sh; do
+            bash -n "$script"
+          done
+          kubectl kustomize k8s > /dev/null
+
+      - name: Build images and deploy
+        run: bash scripts/deploy.sh
+
+      - name: Verify the deployment
+        run: bash scripts/verify.sh
+
+      - name: Collect diagnostics on failure
+        if: failure()
+        run: |
+          kubectl --context=minikube -n pz2 get pods,deployments,services -o wide
+          kubectl --context=minikube -n pz2 get events --sort-by=.metadata.creationTimestamp
