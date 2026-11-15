@@ -4,6 +4,11 @@ metadata:
   name: nutrition-v1
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: nutrition
@@ -78,6 +83,11 @@ metadata:
   name: nutrition-v2
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: nutrition
