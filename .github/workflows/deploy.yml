@@ -23,6 +23,22 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Normalize shell script line endings
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checked-out commit:"
+          git rev-parse HEAD
+          python3 - <<'PYTHON'
+          from pathlib import Path
+
+          for path in [*Path("scripts").glob("*.sh"), Path("app/gradlew")]:
+              data = path.read_bytes()
+              count = data.count(b"\r\n")
+              path.write_bytes(data.replace(b"\r\n", b"\n"))
+              print(f"{path}: normalized {count} CRLF line endings")
+          PYTHON
+
       - name: Validate scripts and manifests
         shell: bash
         run: |
