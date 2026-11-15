@@ -4,6 +4,12 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: Set up/start Minikube and apply infrastructure before deploying
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -47,6 +53,13 @@ jobs:
             bash -n "$script"
           done
           kubectl kustomize k8s > /dev/null
+
+      - name: Test deployment scripts without a cluster
+        run: python3 -m unittest discover -s tests -p 'test_deployment_scripts.py'
+
+      - name: Bootstrap cluster and infrastructure
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap }}
+        run: bash scripts/bootstrap.sh
 
       - name: Build images and deploy
         run: bash scripts/deploy.sh

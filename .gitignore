@@ -3,3 +3,4 @@ app/build/
 .idea/
 *.log
 backups/
+__pycache__/

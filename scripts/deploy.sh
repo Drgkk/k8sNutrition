@@ -8,38 +8,27 @@ BUILD_ID="$COMMIT-${GITHUB_RUN_ID:-$(date -u +%Y%m%d%H%M%S)}-${GITHUB_RUN_ATTEMP
 [[ "$BUILD_ID" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,119}$ ]] || { echo 'Invalid build identifier' >&2; exit 1; }
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-bash "$ROOT/scripts/check-access.sh" docker
-minikube start --profile=minikube --driver=docker --cpus=2 --memory=4096
-# The previous combined Pod owns a different PVC. Never delete its data silently.
-LEGACY="$("${K[@]}" get deployment nutrition --ignore-not-found -o name)"
-if [[ -n "$LEGACY" ]]; then
-  echo 'Old combined Deployment detected. Follow the migration steps in README.md to back up the database and remove old workloads first.' >&2
+# Routine releases require an existing cluster; they never start Minikube.
+if ! bash "$ROOT/scripts/check-access.sh" cluster; then
+  echo 'Cluster access failed. Start the existing cluster with minikube start -p minikube, or run bash scripts/bootstrap.sh for initial setup.' >&2
   exit 1
 fi
-for addon in ingress metrics-server; do
-  minikube -p minikube addons enable "$addon"
-done
-kubectl --context=minikube -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=300s
-kubectl --context=minikube -n kube-system rollout status deployment/metrics-server --timeout=180s
+if ! "${K[@]}" get deployment/postgres configmap/nutrition-config secret/nutrition-db pvc/postgres-storage >/dev/null; then
+  echo 'Infrastructure is missing. Run bash scripts/bootstrap.sh first.' >&2
+  exit 1
+fi
+"${K[@]}" rollout status deployment/postgres --timeout=300s
 for version in v1 v2; do
   docker build --build-arg "APP_VERSION=$version" -t "nutrition-api:$version-$BUILD_ID" "$ROOT"
   minikube --profile=minikube image load "nutrition-api:$version-$BUILD_ID" --daemon=true --overwrite=true
 done
-# Install DB first so API startup does not race database initialization.
-"${K[@]}" apply -f "$ROOT/k8s/namespace.yaml"
-for manifest in config secret postgres-pv postgres-pvc postgres-service postgres-deployment; do
-  "${K[@]}" apply -f "$ROOT/k8s/$manifest.yaml"
-done
-"${K[@]}" rollout status deployment/postgres --timeout=300s
-# Render into a temporary file so the repository keeps its reusable base tags.
-# Apply only the final images, avoiding an intermediate rollout to v1/v2 tags.
-kubectl --context=minikube kustomize "$ROOT/k8s" | sed \
+# Only apply the Java Deployments. Infrastructure belongs to bootstrap.sh.
+# Apply final build tags directly, avoiding an intermediate rollout to base tags.
+sed \
   -e "s|image: nutrition-api:v1$|image: nutrition-api:v1-$BUILD_ID|" \
   -e "s|image: nutrition-api:v2$|image: nutrition-api:v2-$BUILD_ID|" \
-  > "$WORK/deployment.yaml"
-kubectl --context=minikube apply -f "$WORK/deployment.yaml"
-kubectl --context=minikube apply -f "$ROOT/k8s/loadbalancer.yaml"
-bash "$ROOT/scripts/check-access.sh" cluster
+  "$ROOT/k8s/java-deployment.yaml" > "$WORK/deployment.yaml"
+"${K[@]}" apply -f "$WORK/deployment.yaml"
 # Changing the image tag triggers the Java rollout; unchanged DB Pods stay running.
 echo "Deploying Java build: $BUILD_ID"
 for version in v1 v2; do

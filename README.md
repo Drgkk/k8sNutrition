@@ -61,19 +61,46 @@ Docker Desktop у WSL потребує увімкненої WSL integration. З�
 звичайного користувача без sudo:
 
 ```bash
-bash scripts/check-access.sh docker
+bash scripts/bootstrap.sh
 bash scripts/deploy.sh
 ```
 
-Скрипт виділяє 2 CPU / 4 GiB RAM, вмикає `ingress` і `metrics-server`, збирає
-та імпортує `nutrition-api:v1-<build-id>` і `nutrition-api:v2-<build-id>`, запускає PostgreSQL,
-потім Java та маршрутизацію. Потрібен інтернет для образів і Gradle-залежностей.
-JDK 25 використовується всередині Dockerfile, локальна Java не обов’язкова.
-Повторний deploy застосовує конфігурацію та оновлює обидві версії Java.
-Незмінний Deployment PostgreSQL не перезапускається. Зміна образу або Pod template
-самого PostgreSQL спричинить його заміну зі стратегією `Recreate` і короткочасною
-недоступністю БД. ConfigMap/Secret у змінних середовища вже запущеної БД самі
-не оновлюються: такі зміни застосовуйте окремо, зі свідомим перезапуском PostgreSQL.
+`bootstrap.sh` запускає Minikube з 2 CPU / 4 GiB RAM, вмикає `ingress` та
+`metrics-server`, застосовує namespace, ConfigMap, Secret, PV/PVC, PostgreSQL,
+ClusterIP Services, Ingress та LoadBalancer. Чекає готовності PostgreSQL.
+Java-образи цей скрипт не збирає і Java Deployment не змінює.
+Його запускають для початкового налаштування або після змін інфраструктури.
+Незмінна конфігурація не викликає примусових перезапусків.
+
+`deploy.sh` потребує вже запущеного та налаштованого кластера. Перевіряє
+доступ і готовність БД, збирає та імпортує `nutrition-api:v1-<build-id>` і
+`nutrition-api:v2-<build-id>`, застосовує **лише два Java Deployment** та
+чекає rolling update й метрики. Не запускає Minikube, не вмикає аддони,
+не застосовує конфігурацію БД, storage або маршрутизацію. Якщо кластер
+недоступний чи інфраструктура відсутня, завершується з поясненням до збірки образів.
+Потрібен інтернет для образів і Gradle-залежностей. JDK 25 використовується
+в Dockerfile, локальна Java не обов’язкова.
+
+Зміни ConfigMap/Secret, Ingress, Services або PostgreSQL застосовуйте через
+`bootstrap.sh`. Зміна Pod template PostgreSQL викликає `Recreate` та коротку
+недоступність БД. Зміна ConfigMap/Secret не оновлює змінні середовища вже
+запущеної БД: потрібен окремий свідомий restart; пароль наявного користувача
+PostgreSQL також змінюється через SQL, не самим Secret.
+
+## GitHub Actions
+
+При push у `master` workflow виконує перевірки, **тільки `deploy.sh`**, а потім
+`verify.sh`. Налаштований self-hosted runner має працювати від того самого
+користувача, що має доступ до Docker та Minikube.
+
+Для початкового налаштування через GitHub відкрийте **Actions → Build and deploy
+to Minikube → Run workflow**, увімкніть параметр **bootstrap** і запустіть.
+Це виконає `bootstrap.sh`, потім звичайні deploy та verify. За замовчуванням
+параметр вимкнений; push ніколи сам не вмикає bootstrap. Той самий ручний режим
+використовуйте, коли треба застосувати зміни інфраструктури з репозиторію.
+Після зупинки кластера звичайний push завершується помилкою і не запускає його
+знову. Увімкніть кластер вручну й запустіть workflow повторно або оберіть
+ручний запуск із bootstrap.
 
 Кожна збірка має окремий тег: у CI він містить SHA коміту, ID запуску та номер
 спроби; локально — SHA, UTC-час та випадковий суфікс. Скрипт генерує тимчасовий
@@ -101,10 +128,10 @@ kubectl --context=minikube -n pz2 rollout status deployment/nutrition-v2 --timeo
 Попередній образ має залишатися у Minikube; rollback коду не скасовує SQL-міграції.
 Наступний CI deploy знову встановить поточну збірку репозиторію.
 
-Якщо у кластері є старий combined Deployment `nutrition`, скрипт зупиняється
+Якщо у кластері є старий combined Deployment `nutrition`, bootstrap зупиняється
 до зміни даних: див. міграцію нижче. Старий PVC не видаляється автоматично.
 
-Рекомендований шлях — `scripts/deploy.sh`, який підставляє теги збірки.
+Рекомендований шлях — `scripts/bootstrap.sh`, потім `scripts/deploy.sh`, який підставляє теги збірки.
 Наведений нижче ручний варіант використовує базові теги `nutrition-api:v1` і
 `nutrition-api:v2`: спочатку окремо зберіть та імпортуйте образи саме з цими
 тегами й увімкніть аддони. Не застосовуйте базові маніфести поверх CI deployment,
@@ -277,6 +304,7 @@ kubectl --context=minikube -n pz2 exec deployment/nutrition -c postgres -- \
 kubectl --context=minikube -n pz2 delete deployment nutrition nutrition-proxy hostpath-writer hostpath-reader --ignore-not-found
 kubectl --context=minikube -n pz2 delete service nutrition-api nutrition-proxy nutrition-nodeport nutrition-loadbalancer --ignore-not-found
 kubectl --context=minikube -n pz2 delete configmap nutrition-proxy --ignore-not-found
+bash scripts/bootstrap.sh
 bash scripts/deploy.sh
 ```
 
@@ -297,11 +325,26 @@ bash scripts/verify.sh
 
 ## Зупинка
 
-Зберегти дані й зупинити контейнери:
+Зупинити весь кластер, зберігши його конфігурацію та локальні дані:
+
+```bash
+minikube stop -p minikube
+# Пізніше відновити той самий кластер
+minikube start -p minikube
+kubectl --context=minikube -n pz2 get pods -w
+```
+
+Kubernetes відновить уже розгорнуті застосунки; повторний deploy для самого
+відновлення не потрібен. Тунель `minikube -p minikube tunnel` запускається
+окремо, перевірте EXTERNAL-IP. Для нового релізу після відновлення запустіть
+`deploy.sh`. Для нового кластера — спочатку `bootstrap.sh`, потім `deploy.sh`.
+
+Якщо потрібно зупинити тільки workload, залишивши кластер працювати:
 
 ```bash
 kubectl --context=minikube -n pz2 scale deployment/nutrition-v1 deployment/nutrition-v2 deployment/postgres --replicas=0
-# Відновити: повторити scripts/deploy.sh або scale --replicas=1
+# Відновити перед наступним deploy
+kubectl --context=minikube -n pz2 scale deployment/nutrition-v1 deployment/nutrition-v2 deployment/postgres --replicas=1
 ```
 
 Видалити поточні об’єкти застосунку (PV з Retain не очищає файли на ноді):
