@@ -1,5 +1,7 @@
 # Nutrition API: Java + PostgreSQL у Minikube
 
+Команди для демонстрації: [CHEATSHEET.md](CHEATSHEET.md).
+
 Три Deployment: Java `nutrition-v1`, Java `nutrition-v2` та `postgres`.
 Кожен Pod містить один контейнер. Дві версії Java використовують одну базу.
 Логери, проксі-застосунок, emptyDir і прямі hostPath-монтування Pod видалено.
